@@ -43,7 +43,7 @@ Few observations:
  - If the video cannot be included in the submission because of size restriction on the Git platform, you can upload it to a video hosting platform (like Google Drive) and include the link in the write-up (make sure that video link is public so that we can access it).
  - Make sure that if you make last minute changes to the UI, you update the video or images in the submission folder to reflect those changes.
  
- Once everything is done, please submit the repository link on our platform at example.com/submit. We will review your submission and get back to you with feedback.
+ Once everything is done, please submit the repository link on our platform at https://careers.vertistudio.com/jobs/ELu-Mzlbsl93/junior-software-developer-internship-2026 (Please use the same email adress that you used on https://stagiipebune.ro/). We will review your submission and get back to you with feedback.
 
 ## Story
 
