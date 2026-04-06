@@ -157,164 +157,93 @@ export async function handleListMarkets({ query }: { query: { status?: string } 
   /**
    * Default behavior:
    * If no status is provided, we assume the client wants "active" markets.
-   * This keeps the API ergonomic and avoids forcing the frontend to always pass it.
    */
   const statusFilter = query.status || "active";
 
   /**
    * STEP 1: Fetch base market data
-   *
-   * We intentionally fetch:
-   * - markets (filtered by status)
-   * - creator (only username, to avoid over-fetching)
-   * - outcomes (ordered for consistent UI rendering)
-   *
-   * NOTE:
-   * This is NOT a SQL JOIN in the traditional sense.
-   * Drizzle performs multiple queries under the hood and assembles the result.
-   * This is easier to work with but can become inefficient at scale.
    */
   const markets = await db.query.marketsTable.findMany({
     where: eq(marketsTable.status, statusFilter),
 
     with: {
       creator: {
-        // Only fetch what we need (good practice)
         columns: { username: true },
       },
-
       outcomes: {
-        /**
-         * Outcomes must be ordered (e.g. Yes/No, Team A/Team B)
-         * Otherwise UI rendering may appear inconsistent between requests.
-         */
         orderBy: (outcomes, { asc }) => asc(outcomes.position),
       },
     },
   });
 
   /**
-   * STEP 2: Enrich markets with computed data
-   *
-   * At this stage, we have:
-   * - markets
-   * - outcomes
-   * - creator usernames
-   *
-   * What we DON'T have:
-   * - total bets per outcome
-   * - total bets per market
-   * - odds
-   *
-   * These are computed manually below.
-   *
-   * ⚠️ IMPORTANT:
-   * This implementation suffers from the "N+1 query problem":
-   * For each outcome, we run an additional query to fetch bets.
-   * This is acceptable for small datasets but will not scale.
-   *
-   * Future optimization:
-   * Replace this with a single aggregated SQL query using GROUP BY.
+   * STEP 2: Fetch ALL bets aggregated by outcome (fixes N+1)
    */
-  const enrichedMarkets = await Promise.all(
-    markets.map(async (market) => {
-      /**
-       * STEP 2.1: Compute total bets per outcome
-       *
-       * For each outcome in the market:
-       * - fetch all bets
-       * - sum their amounts
-       *
-       * NOTE:
-       * We fetch ALL rows and reduce in JS.
-       * A more efficient approach would be:
-       * SELECT SUM(amount) FROM bets WHERE outcome_id = ?
-       */
-      const betsPerOutcome = await Promise.all(
-      market.outcomes.map(async (outcome) => {
-        // ✅ Aggregate total bet amount for this outcome in one query
-        const [result] = await db
-          .select({
-            totalBets: sql<number>`SUM(${betsTable.amount})`,
-          })
-          .from(betsTable)
-          .where(eq(betsTable.outcomeId, outcome.id));
-
-        // result.totalBets can be null if there are no bets
-        return { outcomeId: outcome.id, totalBets: result.totalBets ?? 0 };
-      })
-    );
-
-      /**
-       * STEP 2.2: Compute total bets across the entire market
-       *
-       * This is needed to calculate odds later.
-       */
-      const totalMarketBets = betsPerOutcome.reduce((sum, b) => sum + b.totalBets, 0);
-
-      /**
-       * STEP 2.3: Construct response object
-       *
-       * We transform raw DB data into a shape suitable for the frontend.
-       */
-      return {
-        id: market.id,
-        title: market.title,
-        status: market.status,
-
-        /**
-         * Creator username (optional chaining for safety)
-         */
-        creator: market.creator?.username,
-
-        /**
-         * Map outcomes and attach computed fields
-         */
-        outcomes: market.outcomes.map((outcome) => {
-          /**
-           * Find precomputed total bets for this outcome
-           */
-          const outcomeBets =
-            betsPerOutcome.find((b) => b.outcomeId === outcome.id)?.totalBets || 0;
-
-          /**
-           * Odds calculation:
-           * percentage of total market bets allocated to this outcome
-           *
-           * Example:
-           * outcomeBets = 30
-           * totalMarketBets = 100
-           * odds = 30%
-           *
-           * We guard against division by zero.
-           */
-          const odds =
-            totalMarketBets > 0
-              ? Number(((outcomeBets / totalMarketBets) * 100).toFixed(2))
-              : 0;
-
-          return {
-            id: outcome.id,
-            title: outcome.title,
-            odds,
-            totalBets: outcomeBets,
-          };
-        }),
-
-        /**
-         * Total liquidity in this market
-         * (useful for sorting, analytics, UI display)
-         */
-        totalMarketBets,
-      };
-    }),
-  );
+  const outcomeTotals = await db
+    .select({
+      outcomeId: betsTable.outcomeId,
+      totalBets: sql<number>`SUM(${betsTable.amount})`,
+    })
+    .from(betsTable)
+    .groupBy(betsTable.outcomeId);
 
   /**
-   * FINAL STEP:
-   * Return enriched markets to the caller.
-   *
-   * At this point, the data is fully computed and ready for frontend consumption.
+   * Convert to a lookup map for O(1) access
+   */
+  const betsMap = new Map<number, number>();
+  for (const row of outcomeTotals) {
+    betsMap.set(row.outcomeId, row.totalBets ?? 0);
+  }
+
+  /**
+   * STEP 3: Enrich markets with computed data
+   */
+  const enrichedMarkets = markets.map((market) => {
+    /**
+     * Attach total bets to each outcome
+     */
+    const outcomesWithBets = market.outcomes.map((outcome) => {
+      const totalBets = betsMap.get(outcome.id) ?? 0;
+      return { ...outcome, totalBets };
+    });
+
+    /**
+     * Compute total market liquidity
+     */
+    const totalMarketBets = outcomesWithBets.reduce(
+      (sum, o) => sum + o.totalBets,
+      0
+    );
+
+    /**
+     * Build final response
+     */
+    return {
+      id: market.id,
+      title: market.title,
+      status: market.status,
+      creator: market.creator?.username,
+
+      outcomes: outcomesWithBets.map((outcome) => {
+        const odds =
+          totalMarketBets > 0
+            ? Number(((outcome.totalBets / totalMarketBets) * 100).toFixed(2))
+            : 0;
+
+        return {
+          id: outcome.id,
+          title: outcome.title,
+          totalBets: outcome.totalBets,
+          odds,
+        };
+      }),
+
+      totalMarketBets,
+    };
+  });
+
+  /**
+   * FINAL STEP: Return enriched markets
    */
   return enrichedMarkets;
 }

@@ -20,6 +20,7 @@ function DashboardPage() {
       setIsLoading(true);
       setError(null);
       const data = await api.listMarkets(status);
+      console.log(data)
       setMarkets(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load markets");
