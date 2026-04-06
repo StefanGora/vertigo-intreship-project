@@ -153,12 +153,13 @@ export async function handleCreateMarket({
   };
 }
 
-export async function handleListMarkets({ query }: { query: { status?: string } }) {
+export async function handleListMarkets({ query, }: { query: { status?: string, sortBy?: string } }) {
   /**
    * Default behavior:
    * If no status is provided, we assume the client wants "active" markets.
    */
   const statusFilter = query.status || "active";
+  const sortFlag = query.sortBy || "date";
 
   /**
    * STEP 1: Fetch base market data
@@ -223,6 +224,7 @@ export async function handleListMarkets({ query }: { query: { status?: string } 
       title: market.title,
       status: market.status,
       creator: market.creator?.username,
+      creationDate: new Date(market.createdAt).toLocaleDateString(),
 
       outcomes: outcomesWithBets.map((outcome) => {
         const odds =

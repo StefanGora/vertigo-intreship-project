@@ -14,13 +14,13 @@ function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<"active" | "resolved">("active");
+  const [sortBy, setSortBy] = useState<"date" | "bets" | "participants">("date");
 
   const loadMarkets = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      const data = await api.listMarkets(status);
-      console.log(data)
+      const data = await api.listMarkets(status,sortBy);
       setMarkets(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load markets");
@@ -31,7 +31,7 @@ function DashboardPage() {
 
   useEffect(() => {
     loadMarkets();
-  }, [status]);
+  }, [status, sortBy]);
 
   if (!isAuthenticated) {
     return (
@@ -81,9 +81,15 @@ function DashboardPage() {
           >
             Resolved Markets
           </Button>
-          <Button variant="outline" onClick={loadMarkets} disabled={isLoading}>
-            {isLoading ? "Refreshing..." : "Refresh"}
-          </Button>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "date" | "bets" | "participants")}
+            className="border rounded px-2 py-1"
+          >
+            <option value="date">Date</option>
+            <option value="bets">Bet Size</option>
+            <option value="participants">Participants</option>
+          </select>
         </div>
 
         {/* Error State */}

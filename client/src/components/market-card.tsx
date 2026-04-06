@@ -17,7 +17,11 @@ export function MarketCard({ market }: MarketCardProps) {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <CardTitle className="text-xl">{market.title}</CardTitle>
-            <CardDescription>By: {market.creator || "Unknown"}</CardDescription>
+            <CardDescription className="flex flex-col gap-1">
+              <span>By: {market.creator || "Unknown"}</span>
+              <span>Date: {market.creationDate || "Unknown"}</span>
+            </CardDescription>
+            
           </div>
           <Badge variant={market.status === "active" ? "default" : "secondary"}>
             {market.status === "active" ? "Active" : "Resolved"}

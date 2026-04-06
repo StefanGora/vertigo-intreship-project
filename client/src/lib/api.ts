@@ -9,6 +9,7 @@ export interface Market {
   creator?: string;
   outcomes: MarketOutcome[];
   totalMarketBets: number;
+  creationDate: string;
 }
 
 export interface MarketOutcome {
@@ -91,8 +92,11 @@ class ApiClient {
   }
 
   // Markets endpoints
-  async listMarkets(status: "active" | "resolved" = "active"): Promise<Market[]> {
-    return this.request(`/api/markets?status=${status}`);
+  async listMarkets(status: "active" | "resolved" = "active", 
+                    sortBy: "date" | "bets" | "participants"): Promise<Market[]> {
+    const params = new URLSearchParams({ status, sortBy });
+    console.log(params.toString()); 
+    return this.request(`/api/markets?${params.toString()}`);
   }
 
   async getMarket(id: number): Promise<Market> {
