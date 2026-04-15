@@ -15,6 +15,15 @@ export function decodeCursor(cursor?: string | null): Cursor | null {
   return JSON.parse(Buffer.from(cursor, "base64").toString());
 }
 
+export function buildSimpleCursorCondition(cursor: Cursor | null, table: any) {
+  if (!cursor) return undefined;
+
+  return or(
+    lt(table.createdAt, new Date(cursor.value)),
+    and(eq(table.createdAt, new Date(cursor.value)), lt(table.id, cursor.id))
+  );
+}
+
 export function buildCursorCondition({
   sortBy,
   cursor,

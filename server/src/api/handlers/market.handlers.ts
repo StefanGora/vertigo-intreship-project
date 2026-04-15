@@ -1,5 +1,6 @@
 import { eq, sql, desc, inArray  } from "drizzle-orm";
 import { encodeCursor, decodeCursor, buildCursorCondition } from "../../lib/cursor";
+import { calculateOutcomeOdds } from "../../lib/odds";
 import db from "../../db";
 import { usersTable, marketsTable, marketOutcomesTable, betsTable } from "../../db/schema";
 import {
@@ -196,10 +197,7 @@ export async function handleListMarkets({
     const outcomesWithBets = relatedOutcomes.map((o) => {
       const totalBets = outcomeTotalsMap.get(o.id) ?? 0;
 
-      const odds =
-        market.totalMarketBets > 0
-          ? Number(((totalBets / market.totalMarketBets) * 100).toFixed(2))
-          : 0;
+      const odds = calculateOutcomeOdds(totalBets, market.totalMarketBets);
 
       return {
         id: o.id,
