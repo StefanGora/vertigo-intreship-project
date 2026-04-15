@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { authMiddleware } from "../middleware/auth.middleware";
-import { handleCreateMarket, handleListMarkets, handleGetMarket, handlePlaceBet } from "./handlers";
+import { handleCreateMarket, handleListMarkets, handleGetMarket } from "./handlers/market.handlers";
+import { handlePlaceBet } from "./handlers/bets.handlers";
 
 export const marketRoutes = new Elysia({ prefix: "/api/markets" })
   .use(authMiddleware)

@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { handleRegister, handleLogin } from "./handlers";
+import { handleRegister, handleLogin } from "./handlers/auth.handlers";
 
 export const authRoutes = new Elysia({ prefix: "/api/auth" })
   .post("/register", handleRegister, {
