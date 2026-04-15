@@ -52,6 +52,8 @@ export const marketsTable = sqliteTable(
   (table) => ({
     createdByIdx: index("markets_created_by_idx").on(table.createdBy),
     statusIdx: index("markets_status_idx").on(table.status),
+    statusCreatedAtIdx: index("markets_status_created_at_idx")
+    .on(table.status, table.createdAt),
   }),
 );
 
@@ -68,6 +70,8 @@ export const marketOutcomesTable = sqliteTable(
   },
   (table) => ({
     marketIdIdx: index("market_outcomes_market_id_idx").on(table.marketId),
+    
+    
   }),
 );
 
@@ -94,6 +98,8 @@ export const betsTable = sqliteTable(
     userIdIdx: index("bets_user_id_idx").on(table.userId),
     marketIdIdx: index("bets_market_id_idx").on(table.marketId),
     outcomeIdIdx: index("bets_outcome_id_idx").on(table.outcomeId),
+    marketAmountIdx: index("bets_market_amount_idx").on(table.marketId, table.amount),
+    marketUserIdx: index("bets_market_user_idx").on(table.marketId, table.userId)
   }),
 );
 

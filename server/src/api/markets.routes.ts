@@ -8,6 +8,7 @@ export const marketRoutes = new Elysia({ prefix: "/api/markets" })
     query: t.Object({
       status: t.Optional(t.String()),
       sortBy: t.Optional(t.String()), 
+      cursor: t.Optional(t.String()), 
     }),
   })
   .get("/:id", handleGetMarket, {

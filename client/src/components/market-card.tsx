@@ -20,6 +20,7 @@ export function MarketCard({ market }: MarketCardProps) {
             <CardDescription className="flex flex-col gap-1">
               <span>By: {market.creator || "Unknown"}</span>
               <span>Date: {market.creationDate || "Unknown"}</span>
+              <span>Participants: {market.participants || "Unknown"}</span>
             </CardDescription>
             
           </div>

@@ -1,4 +1,6 @@
-import { eq, and, sql  } from "drizzle-orm";
+import { eq, and, sql, desc, inArray  } from "drizzle-orm";
+import { encodeCursor, decodeCursor, buildCursorCondition } from "../lib/cursor";
+import type { Cursor } from "../lib/cursor";
 import db from "../db";
 import { usersTable, marketsTable, marketOutcomesTable, betsTable } from "../db/schema";
 import { hashPassword, verifyPassword, type AuthTokenPayload } from "../lib/auth";
@@ -153,32 +155,122 @@ export async function handleCreateMarket({
   };
 }
 
-export async function handleListMarkets({ query, }: { query: { status?: string, sortBy?: string } }) {
-  /**
-   * Default behavior:
-   * If no status is provided, we assume the client wants "active" markets.
-   */
-  const statusFilter = query.status || "active";
-  const sortFlag = query.sortBy || "date";
+export async function handleListMarkets({
+  query,
+}: {
+  query: {
+    status?: string;
+    sortBy?: "date" | "bets" | "participants";
+    cursor?: string | null;
+  };
+}) {
+  const statusFilter = query.status ?? "active";
+  const sortBy = query.sortBy ?? "date";
+  const cursor = decodeCursor(query.cursor);
+
+  console.log(cursor)
 
   /**
-   * STEP 1: Fetch base market data
+   * -----------------------------
+   * Aggregations (IMPORTANT: reuse everywhere)
+   * -----------------------------
    */
-  const markets = await db.query.marketsTable.findMany({
-    where: eq(marketsTable.status, statusFilter),
+  const betsSum = sql<number>`COALESCE(SUM(${betsTable.amount}), 0)`;
+  const participantsCount = sql<number>`COUNT(DISTINCT ${betsTable.userId})`;
 
-    with: {
-      creator: {
-        columns: { username: true },
-      },
-      outcomes: {
-        orderBy: (outcomes, { asc }) => asc(outcomes.position),
-      },
-    },
+  const sortMap = {
+    date: desc(marketsTable.createdAt),
+    bets: desc(betsSum),
+    participants: desc(participantsCount),
+  };
+
+  const sortExpr = sortMap[sortBy];
+
+  /**
+   * -----------------------------
+   * Base query
+   * -----------------------------
+   */
+  let queryBuilder = db
+    .select({
+      id: marketsTable.id,
+      title: marketsTable.title,
+      status: marketsTable.status,
+      description: marketsTable.description,
+      createdAt: marketsTable.createdAt,
+      creator: usersTable.username,
+
+      totalMarketBets: betsSum,
+      participants: participantsCount,
+    })
+    .from(marketsTable)
+    .leftJoin(usersTable, eq(usersTable.id, marketsTable.createdBy))
+    .leftJoin(
+      marketOutcomesTable,
+      eq(marketOutcomesTable.marketId, marketsTable.id)
+    )
+    .leftJoin(
+      betsTable,
+      eq(betsTable.outcomeId, marketOutcomesTable.id)
+    )
+    .where(eq(marketsTable.status, statusFilter))
+    .groupBy(
+      marketsTable.id,
+      marketsTable.title,
+      marketsTable.status,
+      marketsTable.createdAt,
+      usersTable.username
+    );
+
+  /**
+   * -----------------------------
+   * CURSOR FILTER 
+   * -----------------------------
+   */
+  const cursorCondition = buildCursorCondition({
+    sortBy,
+    cursor,
+    table: marketsTable,
+    betsSum,
+    participantsCount,
+  });
+
+  if (cursorCondition) {
+    // IMPORTANT: date uses WHERE, aggregates use HAVING
+    if (sortBy === "date") {
+      queryBuilder = queryBuilder.where(cursorCondition);
+    } else {
+      queryBuilder = queryBuilder.having(cursorCondition);
+    }
+  }
+
+  /**
+   * -----------------------------
+   * Final query execution
+   * -----------------------------
+   */
+  const markets = await queryBuilder
+    .orderBy(sortExpr, desc(marketsTable.id))
+    .limit(20);
+
+  if (!markets) throw new Error("Markets query failed");
+
+  /**
+   * -----------------------------
+   * Outcomes
+   * -----------------------------
+   */
+  const marketIds = markets.map((m) => m.id);
+
+  const outcomes = await db.query.marketOutcomesTable.findMany({
+    where: inArray(marketOutcomesTable.marketId, marketIds),
+    orderBy: (o, { asc }) => asc(o.position),
   });
 
   /**
-   * STEP 2: Fetch ALL bets aggregated by outcome (fixes N+1)
+   * -----------------------------
+   * Outcome totals
+   * -----------------------------
    */
   const outcomeTotals = await db
     .select({
@@ -188,66 +280,73 @@ export async function handleListMarkets({ query, }: { query: { status?: string, 
     .from(betsTable)
     .groupBy(betsTable.outcomeId);
 
-  /**
-   * Convert to a lookup map for O(1) access
-   */
-  const betsMap = new Map<number, number>();
+  const outcomeTotalsMap = new Map<number, number>();
   for (const row of outcomeTotals) {
-    betsMap.set(row.outcomeId, row.totalBets ?? 0);
+    outcomeTotalsMap.set(row.outcomeId, row.totalBets ?? 0);
   }
 
   /**
-   * STEP 3: Enrich markets with computed data
+   * -----------------------------
+   * Response
+   * -----------------------------
    */
-  const enrichedMarkets = markets.map((market) => {
-    /**
-     * Attach total bets to each outcome
-     */
-    const outcomesWithBets = market.outcomes.map((outcome) => {
-      const totalBets = betsMap.get(outcome.id) ?? 0;
-      return { ...outcome, totalBets };
-    });
-
-    /**
-     * Compute total market liquidity
-     */
-    const totalMarketBets = outcomesWithBets.reduce(
-      (sum, o) => sum + o.totalBets,
-      0
+  const response = markets.map((market) => {
+    const relatedOutcomes = outcomes.filter(
+      (o) => o.marketId === market.id
     );
 
-    /**
-     * Build final response
-     */
+    const outcomesWithBets = relatedOutcomes.map((o) => {
+      const totalBets = outcomeTotalsMap.get(o.id) ?? 0;
+
+      const odds =
+        market.totalMarketBets > 0
+          ? Number(((totalBets / market.totalMarketBets) * 100).toFixed(2))
+          : 0;
+
+      return {
+        id: o.id,
+        title: o.title,
+        totalBets,
+        odds,
+      };
+    });
+
     return {
       id: market.id,
       title: market.title,
       status: market.status,
-      creator: market.creator?.username,
+      creator: market.creator,
+      description: market.description,
       creationDate: new Date(market.createdAt).toLocaleDateString(),
-
-      outcomes: outcomesWithBets.map((outcome) => {
-        const odds =
-          totalMarketBets > 0
-            ? Number(((outcome.totalBets / totalMarketBets) * 100).toFixed(2))
-            : 0;
-
-        return {
-          id: outcome.id,
-          title: outcome.title,
-          totalBets: outcome.totalBets,
-          odds,
-        };
-      }),
-
-      totalMarketBets,
+      totalMarketBets: market.totalMarketBets,
+      participants: market.participants,
+      outcomes: outcomesWithBets,
     };
   });
 
   /**
-   * FINAL STEP: Return enriched markets
+   * -----------------------------
+   * NEXT CURSOR
+   * -----------------------------
    */
-  return enrichedMarkets;
+  const last = markets[markets.length - 1];
+
+  const nextCursor = last
+    ? encodeCursor({
+        value:
+          sortBy === "date"
+            ? new Date(last.createdAt).getTime()
+            : sortBy === "bets"
+            ? last.totalMarketBets
+            : last.participants,
+        id: last.id,
+      })
+    : null;
+
+  return {
+    data: response,
+    cursor: nextCursor
+  };
 }
 
 export async function handleGetMarket({
