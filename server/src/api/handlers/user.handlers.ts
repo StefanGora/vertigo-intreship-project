@@ -8,23 +8,15 @@ export async function handleLisActiveBets({
   query,
   user,
 }: {
-  query: {
-    cursor?: string | null;
-  };
+  query: { cursor?: string | null };
   user: { id: number } | null;
 }) {
-  if (!user) {
-    return { error: "Unauthorized" };
-  }
+  if (!user) return { error: "Unauthorized" };
 
   const cursor = decodeCursor(query.cursor);
+  const cursorCondition = buildSimpleCursorCondition(cursor, betsTable);
 
-  /**
-   * -----------------------------
-   * BASE QUERY (paginated)
-   * -----------------------------
-   */
-  let queryBuilder = db
+  const userBets = await db
     .select({
       betId: betsTable.id,
       amount: betsTable.amount,
@@ -47,36 +39,12 @@ export async function handleLisActiveBets({
       and(
         eq(betsTable.userId, user.id),
         eq(marketsTable.status, "active"),
-      ),
-    );
-
-  /**
-   * -----------------------------
-   * CURSOR FILTER (same pattern as markets)
-   * -----------------------------
-   */
-  const cursorCondition = buildSimpleCursorCondition(cursor, betsTable);
-
-  if (cursorCondition) {
-    queryBuilder = queryBuilder.where(cursorCondition);
-  }
-
-  /**
-   * -----------------------------
-   * FINAL QUERY EXECUTION
-   * -----------------------------
-   */
-  const userBets = await queryBuilder
+        cursorCondition
+      )
+    )
     .orderBy(desc(betsTable.createdAt), desc(betsTable.id))
     .limit(20);
 
-  if (!userBets) throw new Error("Bets query failed");
-
-  /**
-   * -----------------------------
-   * MARKET + OUTCOME TOTALS (for odds)
-   * -----------------------------
-   */
   const marketTotals = await db
     .select({
       marketId: betsTable.marketId,
@@ -87,16 +55,10 @@ export async function handleLisActiveBets({
     .groupBy(betsTable.marketId, betsTable.outcomeId);
 
   const totalsMap = new Map<string, number>();
-
   for (const row of marketTotals) {
     totalsMap.set(`${row.marketId}-${row.outcomeId}`, row.total ?? 0);
   }
 
-  /**
-   * -----------------------------
-   * RESPONSE
-   * -----------------------------
-   */
   const response = userBets.map((bet) => {
     const outcomeTotal =
       totalsMap.get(`${bet.marketId}-${bet.outcomeId}`) ?? 0;
@@ -126,23 +88,16 @@ export async function handleLisActiveBets({
     };
   });
 
-  /**
-   * -----------------------------
-   * NEXT CURSOR (same as markets style)
-   * -----------------------------
-   */
   const last = userBets[userBets.length - 1];
-
-  const nextCursor = last
-    ? encodeCursor({
-        value: new Date(last.createdAt).getTime(),
-        id: last.betId,
-      })
-    : null;
 
   return {
     data: response,
-    cursor: nextCursor,
+    cursor: last
+      ? encodeCursor({
+          value: new Date(last.createdAt).getTime(),
+          id: last.betId,
+        })
+      : null,
   };
 }
 
@@ -150,23 +105,15 @@ export async function handleLisResolvedBets({
   query,
   user,
 }: {
-  query: {
-    cursor?: string | null;
-  };
+  query: { cursor?: string | null };
   user: { id: number } | null;
 }) {
-  if (!user) {
-    return { error: "Unauthorized" };
-  }
+  if (!user) return { error: "Unauthorized" };
 
   const cursor = decodeCursor(query.cursor);
+  const cursorCondition = buildSimpleCursorCondition(cursor, betsTable);
 
-  /**
-   * -----------------------------
-   * BASE QUERY
-   * -----------------------------
-   */
-  let queryBuilder = db
+  const userBets = await db
     .select({
       betId: betsTable.id,
       amount: betsTable.amount,
@@ -189,36 +136,12 @@ export async function handleLisResolvedBets({
       and(
         eq(betsTable.userId, user.id),
         eq(marketsTable.status, "resolved"),
-      ),
-    );
-
-  /**
-   * -----------------------------
-   * CURSOR FILTER
-   * -----------------------------
-   */
-  const cursorCondition = buildSimpleCursorCondition(cursor, betsTable);
-
-  if (cursorCondition) {
-    queryBuilder = queryBuilder.where(cursorCondition);
-  }
-
-  /**
-   * -----------------------------
-   * EXECUTE QUERY
-   * -----------------------------
-   */
-  const userBets = await queryBuilder
+        cursorCondition
+      )
+    )
     .orderBy(desc(betsTable.createdAt), desc(betsTable.id))
     .limit(20);
 
-  if (!userBets) throw new Error("Resolved bets query failed");
-
-  /**
-   * -----------------------------
-   * BUILD RESPONSE (win/loss logic)
-   * -----------------------------
-   */
   const response = userBets.map((bet) => {
     const isWinner =
       bet.outcomeId === bet.resolvedOutcomeId;
@@ -242,22 +165,15 @@ export async function handleLisResolvedBets({
     };
   });
 
-  /**
-   * -----------------------------
-   * CURSOR
-   * -----------------------------
-   */
   const last = userBets[userBets.length - 1];
-
-  const nextCursor = last
-    ? encodeCursor({
-        value: new Date(last.createdAt).getTime(),
-        id: last.betId,
-      })
-    : null;
 
   return {
     data: response,
-    cursor: nextCursor,
+    cursor: last
+      ? encodeCursor({
+          value: new Date(last.createdAt).getTime(),
+          id: last.betId,
+        })
+      : null,
   };
 }

@@ -1,57 +1,65 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { ActiveBetCard } from "@/components/activeBet-card";
+import { ResolvedBetCard } from "@/components/resolvedBet-card";
 import { useAuth } from "@/lib/auth-context";
-import { api, Market } from "@/lib/api";
+import { api, ActiveBet, ResolvedBet } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { MarketCard } from "@/components/market-card";
-import { useNavigate } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 
-function DashboardPage() {
-  const { isAuthenticated, user } = useAuth();
+function ProfilePage() {
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const [markets, setMarkets] = useState<Market[]>([]);
+  const [activeBets, setActiveBets] = useState<ActiveBet[]>([]);
+  const [resolvedBets, setResolvedBets] = useState<ResolvedBet[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [status, setStatus] = useState<"active" | "resolved">("active");
-  const [sortBy, setSortBy] = useState<
-    "date" | "bets" | "participants"
-  >("date");
 
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<string[]>([]);
 
-  // ✅ updated loader with silent mode
-  const loadMarkets = async (
+  /**
+   * Redirect if not authenticated
+   */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate({ to: "/auth/login" });
+    }
+  }, [isAuthenticated, navigate]);
+
+  /**
+   * Fetch bets
+   */
+  const loadUserBets = async (
     nextCursor: string | null,
+    overrideStatus?: "active" | "resolved",
     silent = false
   ) => {
     try {
       if (!silent) setIsLoading(true);
 
-      const response = await api.listMarkets(
-        status,
-        sortBy,
-        nextCursor
-      );
+      const currentStatus = overrideStatus ?? status;
 
-      setMarkets(response.data);
+      let response;
+
+      if (currentStatus === "active") {
+        response = await api.listUserBets("active", nextCursor);
+        setActiveBets(response.data);
+      } else {
+        response = await api.listUserBets("resolved", nextCursor);
+        setResolvedBets(response.data);
+      }
+
       setCursor(response.cursor);
+      setError(null);
     } catch (err) {
       if (!silent) {
         setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load markets"
+          err instanceof Error ? err.message : "Failed to load bets"
         );
       }
     } finally {
@@ -59,35 +67,38 @@ function DashboardPage() {
     }
   };
 
-  // ✅ initial load + filters
+  /**
+   * Reload on status change
+   */
   useEffect(() => {
-    setMarkets([]);
     setCursorStack([]);
     setCursor(null);
-    loadMarkets(null);
-  }, [status, sortBy]);
 
-  // ✅ POLLING (silent refresh, keeps current page)
-  useEffect(() => {
+    loadUserBets(null, status);
+  }, [status]);
+
+    /**
+   * Polling
+   */
+    useEffect(() => {
     const interval = setInterval(() => {
       const currentCursor =
         cursorStack[cursorStack.length - 1] ?? null;
 
-      loadMarkets(currentCursor, true); // silent refresh
+      loadUserBets(currentCursor, status, true); // silent refresh
     }, 5000); // 5 seconds
 
     return () => clearInterval(interval);
-  }, [status, sortBy, cursorStack]);
+  }, [status, cursorStack]);
 
-  // ----------------------------
-  // Navigation (FIXED)
-  // ----------------------------
-
+  /**
+   * Pagination
+   */
   const goNext = async () => {
     if (!cursor) return;
 
     setCursorStack((prev) => [...prev, cursor]);
-    await loadMarkets(cursor);
+    await loadUserBets(cursor);
   };
 
   const goPrev = async () => {
@@ -100,16 +111,35 @@ function DashboardPage() {
           ? newStack[newStack.length - 1]
           : null;
 
-      loadMarkets(previousCursor);
+      loadUserBets(previousCursor);
 
       return newStack;
     });
   };
 
-  // ----------------------------
-  // UI
-  // ----------------------------
+  /**
+   * Choose correct dataset
+   */
+  const bets = status === "active" ? activeBets : resolvedBets;
 
+  /**
+   * UI: loading
+   */
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <p className="text-muted-foreground">Loading bets...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  /**
+   * UI: not authenticated fallback (optional safety)
+   */
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -121,9 +151,7 @@ function DashboardPage() {
             Create and participate in prediction markets
           </p>
           <div className="space-x-4">
-            <Button
-              onClick={() => navigate({ to: "/auth/login" })}
-            >
+            <Button onClick={() => navigate({ to: "/auth/login" })}>
               Login
             </Button>
             <Button
@@ -141,16 +169,16 @@ function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
+
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">
-              Markets
-            </h1>
+            <h1 className="text-4xl font-bold text-gray-900">Profile</h1>
             <p className="text-gray-600 mt-2">
-              Welcome back, {user?.username}!
+              Welcome, {user?.username}!
             </p>
           </div>
+
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
@@ -158,16 +186,16 @@ function DashboardPage() {
             >
               Logout
             </Button>
-            <Button
-              onClick={() => navigate({ to: "/markets/new" })}
-            >
+
+            <Button onClick={() => navigate({ to: "/markets/new" })}>
               Create Market
             </Button>
+
             <Button
               variant="outline"
-              onClick={() => navigate({ to: "/user/profile" })}
+              onClick={() => navigate({ to: "/" })}
             >
-              Profile
+              Dashboard
             </Button>
           </div>
         </div>
@@ -178,38 +206,18 @@ function DashboardPage() {
             variant={status === "active" ? "default" : "outline"}
             onClick={() => setStatus("active")}
           >
-            Active Markets
+            Active Bets
           </Button>
+
           <Button
             variant={status === "resolved" ? "default" : "outline"}
             onClick={() => setStatus("resolved")}
           >
-            Resolved Markets
+            Resolved Bets
           </Button>
-
-          <Select
-            value={sortBy}
-            onValueChange={(value) =>
-              setSortBy(
-                value as "date" | "bets" | "participants"
-              )
-            }
-          >
-            <SelectTrigger className="bg-white text-black border rounded px-2 py-1">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-
-            <SelectContent>
-              <SelectItem value="date">Date</SelectItem>
-              <SelectItem value="bets">Bet Size</SelectItem>
-              <SelectItem value="participants">
-                Participants
-              </SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
-        {/* Error State */}
+        {/* Error */}
         {error && (
           <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive mb-6">
             {error}
@@ -217,31 +225,25 @@ function DashboardPage() {
         )}
 
         {/* Content */}
-        {isLoading ? (
+        {bets.length === 0 ? (
           <Card>
             <CardContent className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">
-                Loading markets...
-              </p>
-            </CardContent>
-          </Card>
-        ) : markets.length === 0 ? (
-          <Card>
-            <CardContent className="flex items-center justify-center py-12">
-              <p className="text-muted-foreground">
-                No markets found.
-              </p>
+              <p className="text-muted-foreground">No bets found.</p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {markets.map((market) => (
-              <MarketCard key={market.id} market={market} />
-            ))}
+            {status === "active"
+              ? activeBets.map((bet) => (
+                  <ActiveBetCard key={bet.betId} bet={bet} />
+                ))
+              : resolvedBets.map((bet) => (
+                  <ResolvedBetCard key={bet.betId} bet={bet} />
+                ))}
           </div>
         )}
 
-        {/* Navigation */}
+        {/* Pagination */}
         <div className="mt-6 flex justify-center gap-4">
           <Button
             disabled={cursorStack.length === 0 || isLoading}
@@ -262,6 +264,6 @@ function DashboardPage() {
   );
 }
 
-export const Route = createFileRoute("/")({
-  component: DashboardPage,
+export const Route = createFileRoute("/user/profile")({
+  component: ProfilePage,
 });

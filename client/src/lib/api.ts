@@ -41,6 +41,49 @@ export type ListMarketsResponse = {
   cursor: string | null;
 };
 
+//helpers for ActiveBet interface
+//More consistent then manual picking properties
+//Updates at runtime if we change type properties
+type SimpleMarket = Pick<Market, "id" | "title" | "status">;
+type ActiveOutcome = Pick<MarketOutcome, "id" | "title" | "odds">;
+
+export interface ActiveBet {
+  betId: number;
+  amount: number;
+  createdAt: string;
+
+  market: SimpleMarket;
+  outcome: ActiveOutcome;
+}
+
+export type ListActiveBetsResponse = {
+  data: ActiveBet[];
+  cursor: string | null;
+};
+
+export interface ResolvedBet {
+  betId: number;
+  amount: number;
+  createdAt: string;
+
+  market: {
+    id: number;
+    title: string;
+  };
+
+  outcome: {
+    id: number;
+    title: string;
+  };
+
+  result: "won" | "lost";
+}
+
+export type ListResolvedBetsResponse = {
+  data: ResolvedBet[];
+  cursor: string | null;
+};
+
 // API Client
 class ApiClient {
   private baseUrl: string;
@@ -127,6 +170,37 @@ class ApiClient {
       body: JSON.stringify({ outcomeId, amount }),
     });
   }
+
+  // User endpoints
+  // Overloads
+  async listUserBets(
+    status: "active",
+    cursor?: string | null
+  ): Promise<ListActiveBetsResponse>;
+
+  async listUserBets(
+    status: "resolved",
+    cursor?: string | null
+  ): Promise<ListResolvedBetsResponse>;
+
+  // Implementation
+  async listUserBets(
+    status: "active" | "resolved" = "active",
+    cursor?: string | null
+  ) {
+    const params = new URLSearchParams(
+      cursor ? { cursor } : {}
+    );
+
+    const query = params.toString();
+
+    const url = query
+      ? `/api/user/bets/${status}?${query}`
+      : `/api/user/bets/${status}`;
+
+    return this.request(url);
+  }
+
 }
 
 export const api = new ApiClient(API_BASE_URL);

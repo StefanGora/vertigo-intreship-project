@@ -16,12 +16,14 @@ export function decodeCursor(cursor?: string | null): Cursor | null {
 }
 
 export function buildSimpleCursorCondition(cursor: Cursor | null, table: any) {
-  if (!cursor) return undefined;
+    if (!cursor) return undefined;
 
-  return or(
-    lt(table.createdAt, new Date(cursor.value)),
-    and(eq(table.createdAt, new Date(cursor.value)), lt(table.id, cursor.id))
-  );
+    const createdAt = new Date(cursor.value);
+
+    return or(
+      lt(table.createdAt, createdAt),
+      and(eq(table.createdAt, createdAt), lt(table.id, cursor.id))
+    );
 }
 
 export function buildCursorCondition({
