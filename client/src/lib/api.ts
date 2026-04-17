@@ -24,6 +24,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  role: "user" | "admin";
   token: string;
 }
 
@@ -150,6 +151,10 @@ class ApiClient {
       params.append("cursor", cursor);
     }
     return this.request(`/api/markets?${params.toString()}`);
+  }
+
+  async getUserBalance(): Promise<{ balance: number }> {
+    return this.request("/api/user/balance");
   }
 
   async getMarket(id: number): Promise<Market> {

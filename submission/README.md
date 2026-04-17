@@ -72,4 +72,10 @@
 - Add roles to dbusers table
 - Add admin credentials to .env.example
 - Add admin user to seeding
+
+- Add User Balance in the Profile UI
+- Create Admin Routes Patch /api/admin/markets/:marketID/resolve and /api/admin/markets/:marketID/payouts
+- Create adminMildeware to gurad routes from user that don't have admin role
+- Creade resolved market handler to change market status and decide wining outcome
+- Create payout handler to calculate wining payouts and distrubuite the cash to user wallets and log transations
 ## Images or Video Demo

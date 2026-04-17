@@ -22,6 +22,8 @@ function ProfilePage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorStack, setCursorStack] = useState<string[]>([]);
 
+  const [balance, setBalance] = useState<number | null>(null);
+
   /**
    * Redirect if not authenticated
    */
@@ -66,6 +68,21 @@ function ProfilePage() {
       if (!silent) setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const res = await api.getUserBalance();
+        setBalance(res.balance);
+      } catch (err) {
+        console.error("Failed to load balance");
+      }
+    };
+
+    if (isAuthenticated) {
+      loadBalance();
+    }
+  }, [isAuthenticated]);
 
   /**
    * Reload on status change
@@ -170,35 +187,44 @@ function ProfilePage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-7xl mx-auto px-4 py-8">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900">Profile</h1>
-            <p className="text-gray-600 mt-2">
-              Welcome, {user?.username}!
-            </p>
-          </div>
+    {/* Header */}
+    <div className="flex items-center justify-between mb-8">
+      
+      {/* LEFT */}
+      <div>
+        <h1 className="text-4xl font-bold text-gray-900">Profile</h1>
+        <p className="text-gray-600 mt-2">
+          Welcome, {user?.username}!
+        </p>
+      </div>
 
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              onClick={() => navigate({ to: "/auth/logout" })}
-            >
-              Logout
-            </Button>
-
-            <Button onClick={() => navigate({ to: "/markets/new" })}>
-              Create Market
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => navigate({ to: "/" })}
-            >
-              Dashboard
-            </Button>
-          </div>
+      {/* RIGHT */}
+      <div className="flex items-center gap-4">
+        
+        {/* Balance */}
+        <div className="px-4 py-2 bg-white rounded shadow text-sm font-medium">
+          Balance: ${balance?.toFixed(2) ?? "0.00"}
         </div>
+
+        <Button
+          variant="outline"
+          onClick={() => navigate({ to: "/auth/logout" })}
+        >
+          Logout
+        </Button>
+
+        <Button onClick={() => navigate({ to: "/markets/new" })}>
+          Create Market
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={() => navigate({ to: "/" })}
+        >
+          Dashboard
+        </Button>
+      </div>
+    </div>
 
         {/* Filters */}
         <div className="mb-6 flex gap-4">

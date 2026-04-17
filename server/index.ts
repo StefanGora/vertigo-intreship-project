@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { authRoutes } from "./src/api/auth.routes";
 import { marketRoutes } from "./src/api/markets.routes";
 import { userRoutes } from "./src/api/user.routes";
+import { adminRoutes } from "./src/api/admin.routes";
 import { jwtPlugin } from "./src/plugins/jwt";
 
 const PORT = Number(process.env.PORT || 4001);
@@ -28,7 +29,8 @@ export const app = new Elysia()
   })
   .use(authRoutes)
   .use(marketRoutes)
-  .use(userRoutes);
+  .use(userRoutes)
+  .use(adminRoutes);
 
 if (import.meta.main) {
   app.listen({
