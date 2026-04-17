@@ -104,6 +104,7 @@ export async function handleLogin({
     id: user.id,
     username: user.username,
     email: user.email,
+    role: user.role,
     token,
   };
 }

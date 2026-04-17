@@ -24,7 +24,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  role: "user" | "admin";
+  role: string;
   token: string;
 }
 
@@ -80,10 +80,34 @@ export interface ResolvedBet {
   result: "won" | "lost";
 }
 
+
 export type ListResolvedBetsResponse = {
   data: ResolvedBet[];
   cursor: string | null;
 };
+
+export interface ResolveMarketResponse {
+  success: boolean;
+  marketId: number;
+  resolvedOutcomeId: number;
+}
+
+export interface PayoutItem {
+  userId: number;
+  betId: number;
+  amount: number;
+}
+
+export interface MarketPayoutResponse {
+  success: boolean;
+  marketId: number;
+  resolvedOutcomeId: number;
+  totalBets: number;
+  winningTotal: number;
+  payouts: PayoutItem[];
+}
+
+
 
 // API Client
 class ApiClient {
@@ -140,6 +164,24 @@ class ApiClient {
       body: JSON.stringify({ email, password }),
     });
   }
+
+  // Admin endpoints
+  async resolveMarket(
+    marketId: number,
+    outcomeId: number
+  ): Promise<ResolveMarketResponse> {
+    return this.request(`/api/admin/markets/${marketId}/resolve`, {
+      method: "PATCH",
+      body: JSON.stringify({ outcomeId }),
+    });
+  }
+
+  async payoutMarket(marketId: number): Promise<MarketPayoutResponse> {
+    return this.request(`/api/admin/markets/${marketId}/payout`, {
+      method: "POST",
+    });
+  }
+  
 
   // Markets endpoints
   async listMarkets(status: "active" | "resolved" = "active", 

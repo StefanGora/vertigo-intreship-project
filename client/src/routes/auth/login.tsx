@@ -26,6 +26,8 @@ function LoginPage() {
         setError(null);
         const user = await api.login(values.email, values.password);
         login(user);
+        localStorage.setItem("user", JSON.stringify(user));
+        localStorage.setItem("auth_token", user.token);
         navigate({ to: "/" });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Login failed");

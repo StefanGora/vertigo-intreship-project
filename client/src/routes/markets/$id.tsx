@@ -36,6 +36,10 @@ function MarketDetailPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
+  const user = JSON.parse(localStorage.getItem("auth_user") || "null");
+  console.log(user)
+  const isAdmin = user?.role === "admin";
+
   const [market, setMarket] = useState<Market | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,11 +53,15 @@ function MarketDetailPage() {
 
   const marketId = parseInt(id, 10);
 
+  // ----------------------------
+  // LOAD MARKET
+  // ----------------------------
   useEffect(() => {
     const loadMarket = async () => {
       try {
         setIsLoading(true);
         const data = await api.getMarket(marketId);
+
         setMarket(data);
 
         if (data.outcomes.length > 0) {
@@ -70,7 +78,7 @@ function MarketDetailPage() {
   }, [marketId]);
 
   // ----------------------------
-  // Validate input before confirm modal
+  // BET VALIDATION
   // ----------------------------
   const handlePlaceBet = () => {
     const amount = parseFloat(betAmount);
@@ -84,7 +92,7 @@ function MarketDetailPage() {
   };
 
   // ----------------------------
-  // Confirm bet
+  // CONFIRM BET
   // ----------------------------
   const confirmBet = async () => {
     try {
@@ -92,11 +100,7 @@ function MarketDetailPage() {
       setError(null);
       setBalanceError(null);
 
-      await api.placeBet(
-        marketId,
-        selectedOutcomeId!,
-        parseFloat(betAmount)
-      );
+      await api.placeBet(marketId, selectedOutcomeId!, parseFloat(betAmount));
 
       setBetAmount("");
       setShowConfirm(false);
@@ -104,10 +108,8 @@ function MarketDetailPage() {
       const updated = await api.getMarket(marketId);
       setMarket(updated);
     } catch (err: any) {
-      const message =
-        err instanceof Error ? err.message : "Failed to place bet";
+      const message = err instanceof Error ? err.message : "Failed to place bet";
 
-      // ✅ Clean detection (better if backend sends code)
       const isBalanceError =
         message.toLowerCase().includes("insufficient") ||
         message.toLowerCase().includes("balance");
@@ -125,7 +127,34 @@ function MarketDetailPage() {
   };
 
   // ----------------------------
-  // Chart data
+  // ADMIN ACTIONS (UPDATED)
+  // ----------------------------
+  const handleResolveMarket = async () => {
+    if (!selectedOutcomeId) return;
+
+    try {
+      await api.admin.resolveMarket(marketId, selectedOutcomeId);
+
+      const updated = await api.getMarket(marketId);
+      setMarket(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resolve market");
+    }
+  };
+
+  const handlePayoutMarket = async () => {
+    try {
+      await api.admin.payoutMarket(marketId);
+
+      const updated = await api.getMarket(marketId);
+      setMarket(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to payout market");
+    }
+  };
+
+  // ----------------------------
+  // CHART DATA
   // ----------------------------
   const total = market?.totalMarketBets ?? 0;
 
@@ -133,12 +162,11 @@ function MarketDetailPage() {
     market?.outcomes.map((o) => ({
       name: o.title,
       value: o.totalBets,
-      percentage:
-        total > 0 ? ((o.totalBets / total) * 100).toFixed(1) : "0",
+      percentage: total > 0 ? ((o.totalBets / total) * 100).toFixed(1) : "0",
     })) || [];
 
   // ----------------------------
-  // UI STATES
+  // GUARDS
   // ----------------------------
   if (!isAuthenticated) {
     return (
@@ -180,6 +208,9 @@ function MarketDetailPage() {
     );
   }
 
+  // ----------------------------
+  // UI
+  // ----------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
       <div className="max-w-3xl mx-auto px-4 space-y-6">
@@ -187,6 +218,19 @@ function MarketDetailPage() {
         <Button variant="outline" onClick={() => navigate({ to: "/" })}>
           ← Back
         </Button>
+
+        {/* ADMIN ACTIONS */}
+        {isAdmin && market.status === "active" && (
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={handleResolveMarket}>
+              Resolve Market
+            </Button>
+
+            <Button onClick={handlePayoutMarket}>
+              Payout
+            </Button>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
@@ -208,7 +252,6 @@ function MarketDetailPage() {
 
           <CardContent className="space-y-6">
 
-            {/* ERROR */}
             {error && (
               <div className="bg-red-100 text-red-600 p-3 rounded">
                 {error}
@@ -238,7 +281,9 @@ function MarketDetailPage() {
                     ? "border-blue-500"
                     : "border-gray-200"
                 }`}
-                onClick={() => market.status === "active" && setSelectedOutcomeId(o.id)}
+                onClick={() =>
+                  market.status === "active" && setSelectedOutcomeId(o.id)
+                }
               >
                 <h4>{o.title}</h4>
                 <p>${o.totalBets.toFixed(2)}</p>
@@ -254,7 +299,6 @@ function MarketDetailPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <Label>Amount</Label>
                   <Input
                     type="number"
                     value={betAmount}
@@ -279,14 +323,20 @@ function MarketDetailPage() {
               </CardHeader>
 
               <CardContent className="space-y-4">
-                <p>Outcome: {
-                  market.outcomes.find(o => o.id === selectedOutcomeId)?.title
-                }</p>
+                <p>
+                  Outcome:{" "}
+                  {market.outcomes.find(
+                    (o) => o.id === selectedOutcomeId
+                  )?.title}
+                </p>
 
                 <p>Amount: ${betAmount}</p>
 
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setShowConfirm(false)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowConfirm(false)}
+                  >
                     Cancel
                   </Button>
 
@@ -299,7 +349,7 @@ function MarketDetailPage() {
           </div>
         )}
 
-        {/* ❌ BALANCE ERROR MODAL */}
+        {/* BALANCE MODAL */}
         {balanceError && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
             <Card className="w-[400px] border-red-500">
@@ -321,7 +371,6 @@ function MarketDetailPage() {
     </div>
   );
 }
-
 export const Route = createFileRoute("/markets/$id")({
   component: MarketDetailPage,
 });
