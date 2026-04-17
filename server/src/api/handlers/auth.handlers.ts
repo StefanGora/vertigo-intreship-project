@@ -1,6 +1,6 @@
 import { eq} from "drizzle-orm";
 import db from "../../db";
-import { usersTable } from "../../db/schema";
+import { usersTable, walletsTable } from "../../db/schema";
 import { hashPassword, verifyPassword, type AuthTokenPayload } from "../../lib/auth";
 import {
   validateRegistration,
@@ -53,6 +53,10 @@ export async function handleRegister({
 
   // Insert new user
   const newUser = await db.insert(usersTable).values({ username, email, passwordHash }).returning();
+  
+  const userId = newUser[0].id;
+  // create new wallet ( hardcoded for now with 1000)
+  const newWallet = await db.insert(walletsTable).values({userId, balance: 1000 }).returning();
 
   // Generate JWT token
   const token = await jwt.sign({ userId: newUser[0].id });

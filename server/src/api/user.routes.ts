@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { authMiddleware } from "../middleware/auth.middleware";
-import { handleLisActiveBets, handleLisResolvedBets } from "./handlers/user.handlers";
+import { handleLisActiveBets, handleLisResolvedBets, handleGetUserBalance } from "./handlers/user.handlers";
 
 export const userRoutes = new Elysia({ prefix: "/api/user" })
 .use(authMiddleware)
@@ -25,4 +25,5 @@ export const userRoutes = new Elysia({ prefix: "/api/user" })
             cursor: t.Optional(t.String()),
           }),
         })
+        .get("/balance", handleGetUserBalance)
   );

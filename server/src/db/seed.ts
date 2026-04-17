@@ -265,6 +265,21 @@ async function insertMarkets(users: SeededUser[]) {
   };
 }
 
+async function insertWallets(users: SeededUser[]) {
+  console.log("\nCreating wallets...");
+
+  const walletValues = users.map((user) => ({
+    userId: user.id,
+    balance: 1000,
+  }));
+
+  await db.insert(schema.walletsTable).values(walletValues);
+
+  console.log(`Created ${walletValues.length} wallets.`);
+
+  return walletValues.length;
+}
+
 function createBetAmount(user: SeededUser) {
   if (user.remainingBalance <= 5) {
     return 0;
@@ -336,6 +351,7 @@ async function insertBets(users: SeededUser[], markets: CreatedMarket[]) {
 
 function printSeedSummary(
   users: SeededUser[],
+  wallets: number,
   marketCount: number,
   outcomeCount: number,
   betCount: number,
@@ -343,7 +359,9 @@ function printSeedSummary(
   console.log("\n============================================================");
   console.log("SEEDING COMPLETE");
   console.log("============================================================");
+
   console.log(`Users:    ${users.length}`);
+  console.log(`Wallets:  ${wallets}`);
   console.log(`Markets:  ${marketCount}`);
   console.log(`Outcomes: ${outcomeCount}`);
   console.log(`Bets:     ${betCount}`);
@@ -355,6 +373,7 @@ function printSeedSummary(
 
   console.log("\nShared password for all seeded users:");
   console.log(`  ${SHARED_PASSWORD}`);
+
   console.log("============================================================\n");
 }
 
@@ -362,10 +381,18 @@ async function seedDatabase() {
   console.log("Seeding database...\n");
 
   const users = await insertUsers();
+  const walletCount = await insertWallets(users);
+
   const { createdMarkets, createdOutcomeCount } = await insertMarkets(users);
   const betCount = await insertBets(users, createdMarkets);
 
-  printSeedSummary(users, createdMarkets.length, createdOutcomeCount, betCount);
+  printSeedSummary(
+    users,
+    walletCount,
+    createdMarkets.length,
+    createdOutcomeCount,
+    betCount
+  );
 }
 
 async function main() {

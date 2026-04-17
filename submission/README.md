@@ -38,5 +38,32 @@
 - add polling for real time updates ( switch to sokets if time allows it... it won't allow be at least we tried :/ )
 - FEATURE COMPLETED => User Profile Page with active/resolved user bets
 
+#-17/4/2026
+- The seeding broke plang oftez suspin, par ca API-ul nu e afectat totusi
+- (am sters repo-ul si recopiat, l-am luat pe cel din proiectul initial si tot degeba tot nu genereaza cum trebuie )
+- {
+    "data": [
+        {
+            "id": 818,
+            "title": "Will Hagenes, Paucek and Gerlach achieve IPO?",
+            "status": "active",
+            "creator": "alicia.gulgowski.pkdv8m.1677",
+            "description": "Market about weather",
+            "creationDate": "4/17/2026",
+            "totalMarketBets": 0,
+            "participants": 0,
+            "outcomes": []
+        },
+    ]
+}
+- in caz ca asta e ultimul commit las aici ideea de baza
+- am vrut sa adaug 2 tabele noi wallets si transactions
+- wallets sa tina monetarul unui user
+- tranasctions sa inregistreze cand se face un pariu sau un admin distribuie un payout in urma solutionarii unui market
+
+
+- added into register handler the insertion of a new wallet
+- validate before placing a bet of the user has enough balance
+- added loging for each bet transation
 
 ## Images or Video Demo

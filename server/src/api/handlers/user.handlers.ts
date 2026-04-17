@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import db from "../../db";
-import { betsTable, marketsTable, marketOutcomesTable } from "../../db/schema";
+import { betsTable, marketsTable, marketOutcomesTable, walletsTable } from "../../db/schema";
 import { decodeCursor, encodeCursor, buildSimpleCursorCondition } from "../../lib/cursor";
 import { calculateOutcomeOdds } from "../../lib/odds";
 
@@ -175,5 +175,32 @@ export async function handleLisResolvedBets({
           id: last.betId,
         })
       : null,
+  };
+}
+
+
+export async function handleGetUserBalance({
+  user,
+}: {
+  user: { id: number } | null;
+}) {
+  if (!user) return { error: "Unauthorized" };
+
+  const wallet = await db
+    .select({
+      balance: walletsTable.balance,
+    })
+    .from(walletsTable)
+    .where(eq(walletsTable.userId, user.id))
+    .limit(1);
+
+  if (!wallet.length) {
+    return {
+      balance: 0,
+    };
+  }
+
+  return {
+    balance: wallet[0].balance,
   };
 }

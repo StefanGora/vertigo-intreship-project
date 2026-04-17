@@ -38,7 +38,9 @@ function MarketDetailPage() {
 
   const [market, setMarket] = useState<Market | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
 
   const [selectedOutcomeId, setSelectedOutcomeId] = useState<number | null>(null);
   const [betAmount, setBetAmount] = useState("");
@@ -58,11 +60,7 @@ function MarketDetailPage() {
           setSelectedOutcomeId(data.outcomes[0].id);
         }
       } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load market details"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load market details");
       } finally {
         setIsLoading(false);
       }
@@ -72,7 +70,7 @@ function MarketDetailPage() {
   }, [marketId]);
 
   // ----------------------------
-  // Validation
+  // Validate input before confirm modal
   // ----------------------------
   const handlePlaceBet = () => {
     const amount = parseFloat(betAmount);
@@ -92,6 +90,7 @@ function MarketDetailPage() {
     try {
       setIsBetting(true);
       setError(null);
+      setBalanceError(null);
 
       await api.placeBet(
         marketId,
@@ -104,10 +103,22 @@ function MarketDetailPage() {
 
       const updated = await api.getMarket(marketId);
       setMarket(updated);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to place bet"
-      );
+    } catch (err: any) {
+      const message =
+        err instanceof Error ? err.message : "Failed to place bet";
+
+      // ✅ Clean detection (better if backend sends code)
+      const isBalanceError =
+        message.toLowerCase().includes("insufficient") ||
+        message.toLowerCase().includes("balance");
+
+      if (isBalanceError) {
+        setShowConfirm(false);
+        setBalanceError("Insufficient balance");
+        return;
+      }
+
+      setError(message);
     } finally {
       setIsBetting(false);
     }
@@ -123,20 +134,17 @@ function MarketDetailPage() {
       name: o.title,
       value: o.totalBets,
       percentage:
-        total > 0
-          ? ((o.totalBets / total) * 100).toFixed(1)
-          : "0",
+        total > 0 ? ((o.totalBets / total) * 100).toFixed(1) : "0",
     })) || [];
 
   // ----------------------------
   // UI STATES
   // ----------------------------
-
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+          <CardContent className="flex flex-col items-center py-12 gap-4">
             <p className="text-muted-foreground">
               Please log in to view this market
             </p>
@@ -161,7 +169,7 @@ function MarketDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+          <CardContent className="flex flex-col items-center py-12 gap-4">
             <p className="text-destructive">Market not found</p>
             <Button onClick={() => navigate({ to: "/" })}>
               Back to Markets
@@ -182,8 +190,8 @@ function MarketDetailPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
+            <div className="flex justify-between">
+              <div>
                 <CardTitle className="text-4xl">{market.title}</CardTitle>
                 {market.description && (
                   <CardDescription className="text-lg mt-2">
@@ -192,11 +200,7 @@ function MarketDetailPage() {
                 )}
               </div>
 
-              <Badge
-                variant={
-                  market.status === "active" ? "default" : "secondary"
-                }
-              >
+              <Badge>
                 {market.status === "active" ? "Active" : "Resolved"}
               </Badge>
             </div>
@@ -204,152 +208,62 @@ function MarketDetailPage() {
 
           <CardContent className="space-y-6">
 
+            {/* ERROR */}
             {error && (
-              <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+              <div className="bg-red-100 text-red-600 p-3 rounded">
                 {error}
               </div>
             )}
 
             {/* CHART */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold">
-                Market Distribution
-              </h3>
-
-              <div className="w-full h-64">
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      dataKey="value"
-                      nameKey="name"
-                      outerRadius={100}
-                      label={({ name, percentage }) =>
-                        `${name} (${percentage}%)`
-                      }
-                    >
-                      {chartData.map((_, index) => (
-                        <Cell
-                          key={index}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) =>
-                        `$${value.toFixed(2)}`
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="h-64">
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={chartData} dataKey="value" nameKey="name" outerRadius={100}>
+                    {chartData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
 
             {/* OUTCOMES */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold">Outcomes</h3>
-
-              {market.outcomes.map((outcome) => (
-                <div
-                  key={outcome.id}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-colors ${
-                    selectedOutcomeId === outcome.id
-                      ? "border-primary bg-primary/5"
-                      : "border-secondary bg-secondary/5 hover:border-primary/50"
-                  }`}
-                  onClick={() =>
-                    market.status === "active" &&
-                    setSelectedOutcomeId(outcome.id)
-                  }
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <h4 className="font-semibold">
-                        {outcome.title}
-                      </h4>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Total bets: ${outcome.totalBets.toFixed(2)}
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <p className="text-3xl font-bold text-primary">
-                        {outcome.odds}%
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        odds
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* TOTAL */}
-            <div className="rounded-lg p-6 border border-primary/20 bg-primary/5">
-              <p className="text-sm text-muted-foreground mb-1">
-                Total Market Value
-              </p>
-              <p className="text-4xl font-bold text-primary">
-                ${market.totalMarketBets.toFixed(2)}
-              </p>
-            </div>
+            {market.outcomes.map((o) => (
+              <div
+                key={o.id}
+                className={`p-4 border rounded cursor-pointer ${
+                  selectedOutcomeId === o.id
+                    ? "border-blue-500"
+                    : "border-gray-200"
+                }`}
+                onClick={() => market.status === "active" && setSelectedOutcomeId(o.id)}
+              >
+                <h4>{o.title}</h4>
+                <p>${o.totalBets.toFixed(2)}</p>
+                <p>{o.odds}%</p>
+              </div>
+            ))}
 
             {/* BETTING */}
             {market.status === "active" && (
-              <Card className="bg-secondary/5">
+              <Card>
                 <CardHeader>
                   <CardTitle>Place Your Bet</CardTitle>
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Selected Outcome</Label>
-                    <div className="p-3 bg-white border rounded-md">
-                      {
-                        market.outcomes.find(
-                          (o) => o.id === selectedOutcomeId
-                        )?.title
-                      }
-                    </div>
-                  </div>
+                  <Label>Amount</Label>
+                  <Input
+                    type="number"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                  />
 
-                  <div className="space-y-2">
-                    <Label>Bet Amount ($)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={betAmount}
-                      onChange={(e) =>
-                        setBetAmount(e.target.value)
-                      }
-                      placeholder="Enter amount"
-                      disabled={isBetting}
-                    />
-                  </div>
-
-                  <Button
-                    className="w-full text-lg py-6"
-                    onClick={handlePlaceBet}
-                    disabled={
-                      isBetting ||
-                      !selectedOutcomeId ||
-                      !betAmount
-                    }
-                  >
+                  <Button onClick={handlePlaceBet}>
                     Place Bet
                   </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {market.status === "resolved" && (
-              <Card>
-                <CardContent className="py-6">
-                  <p className="text-muted-foreground">
-                    This market has been resolved.
-                  </p>
                 </CardContent>
               </Card>
             )}
@@ -358,44 +272,47 @@ function MarketDetailPage() {
 
         {/* CONFIRM MODAL */}
         {showConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
             <Card className="w-[400px]">
               <CardHeader>
                 <CardTitle>Confirm Bet</CardTitle>
-                <CardDescription>
-                  Are you sure you want to place this bet?
-                </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-4">
-                <p>
-                  <strong>Outcome:</strong>{" "}
-                  {
-                    market.outcomes.find(
-                      (o) => o.id === selectedOutcomeId
-                    )?.title
-                  }
-                </p>
+                <p>Outcome: {
+                  market.outcomes.find(o => o.id === selectedOutcomeId)?.title
+                }</p>
 
-                <p>
-                  <strong>Amount:</strong> ${betAmount}
-                </p>
+                <p>Amount: ${betAmount}</p>
 
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowConfirm(false)}
-                  >
+                  <Button variant="outline" onClick={() => setShowConfirm(false)}>
                     Cancel
                   </Button>
 
-                  <Button
-                    onClick={confirmBet}
-                    disabled={isBetting}
-                  >
+                  <Button onClick={confirmBet} disabled={isBetting}>
                     Confirm
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* ❌ BALANCE ERROR MODAL */}
+        {balanceError && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+            <Card className="w-[400px] border-red-500">
+              <CardHeader>
+                <CardTitle className="text-red-500">
+                  Insufficient Balance
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="flex justify-end">
+                <Button onClick={() => setBalanceError(null)}>
+                  OK
+                </Button>
               </CardContent>
             </Card>
           </div>
