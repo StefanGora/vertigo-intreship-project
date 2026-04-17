@@ -39,7 +39,7 @@
 - FEATURE COMPLETED => User Profile Page with active/resolved user bets
 
 #-17/4/2026
-- The seeding broke plang oftez suspin, par ca API-ul nu e afectat totusi
+- The seeding broke plang oftez suspin, pare ca API-ul nu e afectat totusi
 - (am sters repo-ul si recopiat, l-am luat pe cel din proiectul initial si tot degeba tot nu genereaza cum trebuie )
 - {
     "data": [
@@ -64,6 +64,12 @@
 
 - added into register handler the insertion of a new wallet
 - validate before placing a bet of the user has enough balance
-- added loging for each bet transation
+- added loging for each bet transaction
+- FEATURE COMPLETED: ADD Wallet - Transactions system to trakc user balance
 
+- WE ARE SOOOO BACK : THE PROBLEM WITH THE SEEDING WAS AN ENVIRONMENTAL MISSMATCH BETWEEN LOCAL APP AND DOCKER APP 
+
+- Add roles to dbusers table
+- Add admin credentials to .env.example
+- Add admin user to seeding
 ## Images or Video Demo

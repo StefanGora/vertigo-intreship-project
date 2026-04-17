@@ -21,6 +21,10 @@ export const usersTable = sqliteTable(
     email: text("email").notNull().unique(),
     passwordHash: text("password_hash").notNull(),
 
+    role: text("role", { enum: ["user", "admin"] })
+      .notNull()
+      .default("user"),
+      
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),

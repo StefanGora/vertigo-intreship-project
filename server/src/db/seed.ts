@@ -164,12 +164,45 @@ function createRandomMarket(): GeneratedMarket {
 async function deleteAllData() {
   console.log("Deleting all data...");
 
+  await db.delete(schema.transactionsTable);
+  await db.delete(schema.walletsTable);
   await db.delete(schema.betsTable);
   await db.delete(schema.marketOutcomesTable);
   await db.delete(schema.marketsTable);
   await db.delete(schema.usersTable);
 
   console.log("All data deleted.\n");
+}
+
+async function insertAdmin() {
+  console.log("Creating admin user...");
+
+  const email = process.env.ADMIN_EMAIL || "admin@admin.com";
+  const password = process.env.ADMIN_PASSWORD || "admin123";
+
+  const passwordHash = await hashPassword(password);
+
+  const [admin] = await db
+    .insert(schema.usersTable)
+    .values({
+      username: "admin",
+      email,
+      passwordHash,
+      role: "admin",
+    })
+    .returning();
+
+  await db.insert(schema.walletsTable).values({
+    userId: admin.id,
+    balance: 10000,
+  });
+
+  console.log("\n===== ADMIN CREATED =====");
+  console.log(`Email: ${email}`);
+  console.log(`Password: ${password}`);
+  console.log("=========================\n");
+
+  return admin;
 }
 
 async function insertUsers() {
@@ -182,6 +215,7 @@ async function insertUsers() {
     return {
       ...user,
       passwordHash,
+      role: "user",
     };
   });
 
@@ -380,6 +414,8 @@ function printSeedSummary(
 async function seedDatabase() {
   console.log("Seeding database...\n");
 
+  const admin = await insertAdmin(); 
+
   const users = await insertUsers();
   const walletCount = await insertWallets(users);
 
@@ -388,13 +424,12 @@ async function seedDatabase() {
 
   printSeedSummary(
     users,
-    walletCount,
+    walletCount + 1, // include admin wallet
     createdMarkets.length,
     createdOutcomeCount,
     betCount
   );
 }
-
 async function main() {
   const command = process.argv[2];
 
